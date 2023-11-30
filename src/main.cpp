@@ -9,6 +9,18 @@
 #include <esp_now.h>
 // #include <M5Core2.h>
 
+// #ifdef M5CORE2
+// #include <M5Core2.h>
+// #elif defined(XIAO_ESP32S3)
+// #include <U8x8lib.h>
+// #endif
+
+// #if defined(XIAO_ESP32S3)
+// #define PIN_WIRE_SCL D5
+// #define PIN_WIRE_SDA D4
+// U8X8_SSD1306_128X64_NONAME_HW_I2C u8x8(/* clock=*/PIN_WIRE_SCL, /* data=*/PIN_WIRE_SDA, /* reset=*/U8X8_PIN_NONE); // OLEDs without Reset of the Display
+// #endif
+
 // Node in peer MAC linked list
 typedef struct peerNode
 {
@@ -24,6 +36,91 @@ void formatMACAddress(const uint8_t *macAddr, char *buffer, int maxLength)
 {
   snprintf(buffer, maxLength, "%02x:%02x:%02x:%02x:%02x:%02x", macAddr[0], macAddr[1], macAddr[2], macAddr[3], macAddr[4], macAddr[5]);
 }
+
+void dumpPeers(peerNode *cur)
+{
+  if (cur == NULL)
+  {
+    Serial.println("NO MAC's in the LL");
+    return;
+  }
+
+  // char macStr[18];
+  // formatMACAddress(cur->addr, macStr, 18);
+  Serial.print("MAC Addresses in the Linked List: ");
+  // Serial.println(macStr);
+  Serial.printf("MAC Address: %02X:%02X:%02X:%02X:%02X:%02X\n",
+                cur->addr[0], cur->addr[1], cur->addr[2], cur->addr[3], cur->addr[4], cur->addr[5]);
+
+  // Recursively call dumpPeers for the next node
+  dumpPeers(cur->next);
+}
+
+void broadcast(const String &message, const uint8_t targetAddr[6])
+{
+  uint8_t destinationAddress[6];
+
+  if (targetAddr != NULL)
+  {
+    // If targetAddr is provided, use it as the destination address
+    memcpy(destinationAddress, targetAddr, 6);
+  }
+  else
+  {
+    // If targetAddr is NULL, use the default broadcast address
+    uint8_t broadcastAddress[] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
+    memcpy(destinationAddress, broadcastAddress, 6);
+  }
+  // this will Broadcast a message to everyone in range
+  // uint8_t broadcastAddress[] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
+  esp_now_peer_info_t peerInfo = {};
+  memcpy(&peerInfo.peer_addr, destinationAddress, 6);
+  if (!esp_now_is_peer_exist(destinationAddress))
+  {
+    esp_now_add_peer(&peerInfo);
+  }
+  // Serial.print(peerInfo);
+  // Serial.print(peerInfo);
+  esp_err_t result = esp_now_send(destinationAddress, (const uint8_t *)message.c_str(), message.length());
+  // and this will send a message to a specific device
+  /*uint8_t peerAddress[] = {0x3C, 0x71, 0xBF, 0x47, 0xA5, 0xC0};
+  esp_now_peer_info_t peerInfo = {};
+  memcpy(&peerInfo.peer_addr, peerAddress, 6);
+  if (!esp_now_is_peer_exist(peerAddress))
+  {
+    esp_now_add_peer(&peerInfo);
+  }
+  esp_err_t result = esp_now_send(peerAddress, (const uint8_t *)message.c_str(), message.length());*/
+  if (result == ESP_OK)
+  {
+    Serial.println("Broadcast message success");
+  }
+  else if (result == ESP_ERR_ESPNOW_NOT_INIT)
+  {
+    Serial.println("ESPNOW not Init.");
+  }
+  else if (result == ESP_ERR_ESPNOW_ARG)
+  {
+    Serial.println("Invalid Argument");
+  }
+  else if (result == ESP_ERR_ESPNOW_INTERNAL)
+  {
+    Serial.println("Internal Error");
+  }
+  else if (result == ESP_ERR_ESPNOW_NO_MEM)
+  {
+    Serial.println("ESP_ERR_ESPNOW_NO_MEM");
+  }
+  else if (result == ESP_ERR_ESPNOW_NOT_FOUND)
+  {
+    Serial.println("Peer not found.");
+  }
+  else
+  {
+    Serial.println("Unknown error");
+  }
+}
+// Recursive function to print MAC addresses in linked list to the serial port
 
 int isMACInList(const uint8_t targetAddr[6])
 {
@@ -64,79 +161,38 @@ int isMACInList(const uint8_t targetAddr[6])
     // Otherwise, add the new node to the end of the list
     prev->next = newNode;
   }
+  broadcast("Welcome! you are added to the MESH", targetAddr);
+  dumpPeers(peerList);
+  // uint8_t broadcastAddress[] = {0x30, 0xAE, 0xA4, 0x15, 0xC7, 0xFC};
   // MAC address not found in the list
+  // macAddr[0], macAddr[1], macAddr[2], macAddr[3], macAddr[4], macAddr[5]
   Serial.print("MAC Address NOT found in the LL ");
   return 0;
-}
-
-void broadcast(const String &message)
-{
-  // this will Broadcast a message to everyone in range
-  uint8_t broadcastAddress[] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
-  esp_now_peer_info_t peerInfo = {};
-  memcpy(&peerInfo.peer_addr, broadcastAddress, 6);
-  if (!esp_now_is_peer_exist(broadcastAddress))
-  {
-    esp_now_add_peer(&peerInfo);
-  }
-  // Serial.print(peerInfo);
-  // Serial.print(peerInfo);
-  esp_err_t result = esp_now_send(broadcastAddress, (const uint8_t *)message.c_str(), message.length());
-  // and this will send a message to a specific device
-  /*uint8_t peerAddress[] = {0x3C, 0x71, 0xBF, 0x47, 0xA5, 0xC0};
-  esp_now_peer_info_t peerInfo = {};
-  memcpy(&peerInfo.peer_addr, peerAddress, 6);
-  if (!esp_now_is_peer_exist(peerAddress))
-  {
-    esp_now_add_peer(&peerInfo);
-  }
-  esp_err_t result = esp_now_send(peerAddress, (const uint8_t *)message.c_str(), message.length());*/
-  if (result == ESP_OK)
-  {
-    Serial.println("Broadcast message success");
-  }
-  else if (result == ESP_ERR_ESPNOW_NOT_INIT)
-  {
-    Serial.println("ESPNOW not Init.");
-  }
-  else if (result == ESP_ERR_ESPNOW_ARG)
-  {
-    Serial.println("Invalid Argument");
-  }
-  else if (result == ESP_ERR_ESPNOW_INTERNAL)
-  {
-    Serial.println("Internal Error");
-  }
-  else if (result == ESP_ERR_ESPNOW_NO_MEM)
-  {
-    Serial.println("ESP_ERR_ESPNOW_NO_MEM");
-  }
-  else if (result == ESP_ERR_ESPNOW_NOT_FOUND)
-  {
-    Serial.println("Peer not found.");
-  }
-  else
-  {
-    Serial.println("Unknown error");
-  }
-}
-// Recursive function to print MAC addresses in linked list to the serial port
-void dumpPeers(peerNode *cur)
-{
-
-  // Recursively print peers to Serial
 }
 
 // Callback function for send process. Prints message success/failure message.
 void OnDataSent(const uint8_t *macAddr, esp_now_send_status_t status)
 {
+  // Serial.println("xPortGetCoreID");
+  // Serial.println(xPortGetCoreID());
   char macStr[18];
   formatMACAddress(macAddr, macStr, 18);
   Serial.print("Last Packet Sent to: ");
   Serial.println(macStr);
   Serial.print("Last Packet Send Status: ");
-  // M5.Lcd.println(status == ESP_NOW_SEND_SUCCESS ? "Delivery Success" : "Delivery Fail");
+  // #if defined(XIAO_ESP32S3)
+  //   u8x8.setCursor(0, 0);
+  //   u8x8.print("Hello World!");
+  // #endif
+  // #ifdef M5CORE2
+  //   // M5.Lcd.println(status == ESP_NOW_SEND_SUCCESS ? "Delivery Success" : "Delivery Fail");
+  // #elif defined(XIAO_ESP32S3)
+  //   u8x8.setCursor(0, 0);
+  //   u8x8.print("Hello World!");
+  // #endif
+
   Serial.println(status == ESP_NOW_SEND_SUCCESS ? "Delivery Success" : "Delivery Fail");
+
   // Print message on send
 }
 
@@ -160,11 +216,17 @@ void OnDataRecv(const uint8_t *macAddr, const uint8_t *incomingData, int len)
 }
 
 String msg = "Hello";
+
 void setup()
 {
 
   // Set up Serial Monitor
   Serial.begin(115200);
+  // #if defined(XIAO_ESP32S3)
+  //   u8x8.begin();
+  //   u8x8.setCursor(0, 0);
+  //   u8x8.print("Hello World!");
+  // #endif
   delay(1000);
   // while (!Serial)
   //   ;
@@ -183,7 +245,7 @@ void setup()
     delay(3000);
     ESP.restart();
   }
-
+  dumpPeers(peerList);
   // Broadcast 5 "Hello" messages
 }
 
@@ -194,7 +256,7 @@ void initialSend()
   {
     Serial.print("initialMsgCount : ");
     Serial.print(initialMsgCount);
-    broadcast(msg);
+    broadcast(msg, NULL);
     initialMsgCount++;
     delay(1000);
   }
@@ -202,167 +264,5 @@ void initialSend()
 void loop()
 {
   initialSend();
-  // Serial.println("working");
-  // delay(3000);
   // Do Nothing
 }
-
-// bool buttonDown = false;
-// bool ledOn = false;
-
-// void formatMacAddress(const uint8_t *macAddr, char *buffer, int maxLength)
-// {
-//   snprintf(buffer, maxLength, "%02x:%02x:%02x:%02x:%02x:%02x", macAddr[0], macAddr[1], macAddr[2], macAddr[3], macAddr[4], macAddr[5]);
-// }
-
-// void receiveCallback(const uint8_t *macAddr, const uint8_t *data, int dataLen)
-// {
-//   Serial.println("receiveCallback running");
-//   // only allow a maximum of 250 characters in the message + a null terminating byte
-//   char buffer[ESP_NOW_MAX_DATA_LEN + 1];
-//   int msgLen = min(ESP_NOW_MAX_DATA_LEN, dataLen);
-//   strncpy(buffer, (const char *)data, msgLen);
-//   // make sure we are null terminated
-//   buffer[msgLen] = 0;
-//   // format the mac address
-//   char macStr[18];
-//   formatMacAddress(macAddr, macStr, 18);
-//   // debug log the message to the serial port
-//   Serial.printf("Received message from: %s - %s\n", macStr, buffer);
-//   M5.Lcd.println("Received message");
-//   // M5.Lcd.println(macAddr);
-// }
-
-// // callback when data is sent
-// void sentCallback(const uint8_t *macAddr, esp_now_send_status_t status)
-// {
-//   char macStr[18];
-//   formatMacAddress(macAddr, macStr, 18);
-//   Serial.print("Last Packet Sent to: ");
-//   Serial.println(macStr);
-//   Serial.print("Last Packet Send Status: ");
-//   // M5.Lcd.println(status == ESP_NOW_SEND_SUCCESS ? "Delivery Success" : "Delivery Fail");
-//   Serial.println(status == ESP_NOW_SEND_SUCCESS ? "Delivery Success" : "Delivery Fail");
-//   M5.Lcd.println(status == ESP_NOW_SEND_SUCCESS ? "Delivery Success" : "Delivery Fail");
-// }
-
-// void broadcast(const String &message)
-// {
-//   // this will Broadcast a message to everyone in range
-//   uint8_t broadcastAddress[] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
-//   esp_now_peer_info_t peerInfo = {};
-//   memcpy(&peerInfo.peer_addr, broadcastAddress, 6);
-//   if (!esp_now_is_peer_exist(broadcastAddress))
-//   {
-//     esp_now_add_peer(&peerInfo);
-//   }
-//   // Serial.print(peerInfo);
-//   // Serial.print(peerInfo);
-//   esp_err_t result = esp_now_send(broadcastAddress, (const uint8_t *)message.c_str(), message.length());
-//   // and this will send a message to a specific device
-//   /*uint8_t peerAddress[] = {0x3C, 0x71, 0xBF, 0x47, 0xA5, 0xC0};
-//   esp_now_peer_info_t peerInfo = {};
-//   memcpy(&peerInfo.peer_addr, peerAddress, 6);
-//   if (!esp_now_is_peer_exist(peerAddress))
-//   {
-//     esp_now_add_peer(&peerInfo);
-//   }
-//   esp_err_t result = esp_now_send(peerAddress, (const uint8_t *)message.c_str(), message.length());*/
-//   if (result == ESP_OK)
-//   {
-//     Serial.println("Broadcast message success");
-//   }
-//   else if (result == ESP_ERR_ESPNOW_NOT_INIT)
-//   {
-//     Serial.println("ESPNOW not Init.");
-//   }
-//   else if (result == ESP_ERR_ESPNOW_ARG)
-//   {
-//     Serial.println("Invalid Argument");
-//   }
-//   else if (result == ESP_ERR_ESPNOW_INTERNAL)
-//   {
-//     Serial.println("Internal Error");
-//   }
-//   else if (result == ESP_ERR_ESPNOW_NO_MEM)
-//   {
-//     Serial.println("ESP_ERR_ESPNOW_NO_MEM");
-//   }
-//   else if (result == ESP_ERR_ESPNOW_NOT_FOUND)
-//   {
-//     Serial.println("Peer not found.");
-//   }
-//   else
-//   {
-//     Serial.println("Unknown error");
-//   }
-// }
-
-// void setup()
-// {
-//   M5.begin(true, false, true);
-//   Serial.begin(9600);
-//   delay(1000);
-//   // Set device in STA mode to begin with
-//   WiFi.mode(WIFI_STA);
-//   Serial.println("ESPNow Example");
-//   // Output my MAC address - useful for later
-//   Serial.print("My MAC Address is: ");
-//   Serial.println(WiFi.macAddress());
-//   // M5.Lcd.print(WiFi.macAddress());
-//   // shut down wifi
-//   WiFi.disconnect();
-//   // startup ESP Now
-//   if (esp_now_init() == ESP_OK)
-//   {
-//     Serial.println("ESPNow Init Success");
-//     esp_now_register_recv_cb(receiveCallback);
-//     esp_now_register_send_cb(sentCallback);
-//   }
-//   else
-//   {
-//     Serial.println("ESPNow Init Failed");
-//     delay(3000);
-//     ESP.restart();
-//   }
-//   // use the built in button
-//   // pinMode(0, INPUT_PULLUP);
-//   // pinMode(2, OUTPUT);
-// }
-
-// void loop()
-// {
-//   broadcast("helloFromM5core2");
-//   Serial.println("working");
-//   Serial.println(millis());
-
-//   // M5.Lcd.println("printing");
-//   delay(10000);
-//   // if (digitalRead(0))
-//   // {
-//   //   // detect the transition from low to high
-//   //   if (!buttonDown)
-//   //   {
-//   //     buttonDown = true;
-//   //     // toggle the LED state
-//   //     ledOn = !ledOn;
-//   //     digitalWrite(2, ledOn);
-//   //     // send a message to everyone else
-//   //     if (ledOn)
-//   //     {
-//   //       broadcast("on");
-//   //     }
-//   //     else
-//   //     {
-//   //       broadcast("off");
-//   //     }
-//   //   }
-//   //   // delay to avoid bouncing
-//   //   delay(500);
-//   // }
-//   // else
-//   // {
-//   //   // reset the button state
-//   //   buttonDown = false;
-//   // }
-// }
