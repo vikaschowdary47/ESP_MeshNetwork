@@ -21,6 +21,30 @@
 // U8X8_SSD1306_128X64_NONAME_HW_I2C u8x8(/* clock=*/PIN_WIRE_SCL, /* data=*/PIN_WIRE_SDA, /* reset=*/U8X8_PIN_NONE); // OLEDs without Reset of the Display
 // #endif
 
+#if defined(XIAO_ESP32S3)
+const int buttonPin = 1; // the number of the pushbutton pin
+int buttonState = 0;     // variable for reading the pushbutton status
+#endif
+
+void readUserButton()
+{
+  // read the state of the pushbutton value:
+  buttonState = digitalRead(buttonPin);
+
+  // check if the pushbutton is pressed. If it is, the buttonState is HIGH:
+  if (buttonState == HIGH)
+  {
+    // turn LED on:
+    digitalWrite(LED_BUILTIN, HIGH);
+    Serial.println("button clicked");
+  }
+  else
+  {
+    // turn LED off:
+    digitalWrite(LED_BUILTIN, LOW);
+    Serial.println("button not clicked");
+  }
+}
 // Node in peer MAC linked list
 typedef struct peerNode
 {
@@ -41,7 +65,7 @@ void dumpPeers(peerNode *cur)
 {
   if (cur == NULL)
   {
-    Serial.println("NO MAC's in the LL");
+    Serial.println("NO MAC address's in the LL");
     return;
   }
 
@@ -79,21 +103,10 @@ void broadcast(const String &message, const uint8_t targetAddr[6])
   {
     esp_now_add_peer(&peerInfo);
   }
-  // Serial.print(peerInfo);
-  // Serial.print(peerInfo);
   esp_err_t result = esp_now_send(destinationAddress, (const uint8_t *)message.c_str(), message.length());
-  // and this will send a message to a specific device
-  /*uint8_t peerAddress[] = {0x3C, 0x71, 0xBF, 0x47, 0xA5, 0xC0};
-  esp_now_peer_info_t peerInfo = {};
-  memcpy(&peerInfo.peer_addr, peerAddress, 6);
-  if (!esp_now_is_peer_exist(peerAddress))
-  {
-    esp_now_add_peer(&peerInfo);
-  }
-  esp_err_t result = esp_now_send(peerAddress, (const uint8_t *)message.c_str(), message.length());*/
   if (result == ESP_OK)
   {
-    Serial.println("Broadcast message success");
+    Serial.print(" >> Broadcast message success || ");
   }
   else if (result == ESP_ERR_ESPNOW_NOT_INIT)
   {
@@ -131,7 +144,7 @@ int isMACInList(const uint8_t targetAddr[6])
     if (memcmp(current->addr, targetAddr, 6) == 0)
     {
       // MAC address found in the list
-      Serial.print("MAC Address found in the LL ");
+      Serial.print("MAC Address found in the LL || ");
       return 1;
     }
     prev = current;
@@ -146,7 +159,6 @@ int isMACInList(const uint8_t targetAddr[6])
     fprintf(stderr, "Error: Unable to allocate memory for a new node.\n");
     exit(EXIT_FAILURE);
   }
-
   // Copy the MAC address to the new node
   memcpy(newNode->addr, targetAddr, 6);
   newNode->next = NULL;
@@ -161,7 +173,7 @@ int isMACInList(const uint8_t targetAddr[6])
     // Otherwise, add the new node to the end of the list
     prev->next = newNode;
   }
-  broadcast("Welcome! you are added to the MESH", targetAddr);
+  broadcast("Welcome", targetAddr);
   dumpPeers(peerList);
   // uint8_t broadcastAddress[] = {0x30, 0xAE, 0xA4, 0x15, 0xC7, 0xFC};
   // MAC address not found in the list
@@ -179,7 +191,7 @@ void OnDataSent(const uint8_t *macAddr, esp_now_send_status_t status)
   formatMACAddress(macAddr, macStr, 18);
   Serial.print("Last Packet Sent to: ");
   Serial.println(macStr);
-  Serial.print("Last Packet Send Status: ");
+  // Serial.print("Last Packet Send Status: ");
   // #if defined(XIAO_ESP32S3)
   //   u8x8.setCursor(0, 0);
   //   u8x8.print("Hello World!");
@@ -191,7 +203,7 @@ void OnDataSent(const uint8_t *macAddr, esp_now_send_status_t status)
   //   u8x8.print("Hello World!");
   // #endif
 
-  Serial.println(status == ESP_NOW_SEND_SUCCESS ? "Delivery Success" : "Delivery Fail");
+  // Serial.println(status == ESP_NOW_SEND_SUCCESS ? "Delivery Success" : "Delivery Fail");
 
   // Print message on send
 }
@@ -201,16 +213,16 @@ void OnDataRecv(const uint8_t *macAddr, const uint8_t *incomingData, int len)
 {
   // Serial.println(macAddr);
   isMACInList(macAddr);
-  printf("MAC Address: %02X:%02X:%02X:%02X:%02X:%02X\n",
-         macAddr[0], macAddr[1], macAddr[2], macAddr[3], macAddr[4], macAddr[5]);
-  Serial.println("receiveCallback running");
+  // printf("MAC Address: %02X:%02X:%02X:%02X:%02X:%02X\n",
+  //        macAddr[0], macAddr[1], macAddr[2], macAddr[3], macAddr[4], macAddr[5]);
+  // Serial.println("receiveCallback running");
   char buffer[ESP_NOW_MAX_DATA_LEN + 1];
   int msgLen = min(ESP_NOW_MAX_DATA_LEN, len);
   strncpy(buffer, (const char *)incomingData, msgLen);
   buffer[msgLen] = 0;
   char macStr[18];
   formatMACAddress(macAddr, macStr, 18);
-  Serial.printf("Received message from: %s - %s\n", macStr, buffer);
+  Serial.printf("Received message from: %s = %s\n", macStr, buffer);
 
   // Process all incoming messages
 }
@@ -228,6 +240,10 @@ void setup()
   //   u8x8.print("Hello World!");
   // #endif
   delay(1000);
+  // initialize the LED pin as an output:
+  pinMode(LED_BUILTIN, OUTPUT);
+  // initialize the pushbutton pin as an input:
+  pinMode(buttonPin, INPUT_PULLUP);
   // while (!Serial)
   //   ;
   WiFi.mode(WIFI_STA);
@@ -264,5 +280,9 @@ void initialSend()
 void loop()
 {
   initialSend();
+  //   #if defined(XIAO_ESP32S3)
+  //  readUserButton();   // variable for reading the pushbutton status
+  // #endif
+
   // Do Nothing
 }
